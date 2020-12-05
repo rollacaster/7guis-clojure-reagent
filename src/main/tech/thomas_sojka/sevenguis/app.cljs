@@ -14,7 +14,7 @@
    {:on-click on-click
     :class (r/class-names class (if disabled
                                   "border-gray-400 text-gray-500"
-                                  "bg-gray-200 border-gray-700"))
+                                  "bg-gray-200 border-gray-500"))
     :disabled disabled}
    children])
 
@@ -121,6 +121,52 @@
                                (< (.getTime (new js/Date (:value return))) (.getTime (new js/Date (:value start))))))}
        "Book"]]]))
 
+(defonce duration-state (r/atom {:duration 0
+                                 :time 0}))
+;; TODO ClearInterval
+(defonce interval (js/setInterval
+                   #(swap! duration-state
+                           (fn [{:keys [time duration] :as state}]
+                             (assoc state :time (if (< time duration) (+ time 0.1) time))))
+                   100))
+
+(defn timer []
+  (let [{:keys [duration time]} @duration-state]
+    [:div {:style {:width "20rem"}}
+     [:div.flex.items-center.mb-4
+      [:div.mr-3 {:class "w-1/3"} "Elapsed time:"]
+      [:div.border.rounded.border-gray-500
+       {:class "w-2/3"}
+       [:div.h-4.bg-gray-400.rounded.w-full
+        [:div.bg-blue-400.h-4.rounded-l
+         {:style {:width (str (if (= duration 0) "100" (min (* (/ time duration) 100)
+                                                            100)) "%")}}]]]]
+     [:div.flex.mb-4
+      [:div.mr-3 {:class "w-1/3"}]
+      [:div (str (.toFixed time 1) "s")]]
+     [:div.flex.items-center.mb-4
+      [:div.mr-3
+       {:class "w-1/3"}
+       "Duration:"]
+      [:div
+       {:class "w-2/3"}
+       [:style "
+              @media screen and (-webkit-min-device-pixel-ratio: 0) {
+                  input[type=\"range\"]::-webkit-slider-thumb {
+                      width: 15px;
+                      -webkit-appearance: none;
+                      appearance: none;
+                      height: 15px;
+                      cursor: ew-resize;
+                      background: #63b3ed;
+                      border-radius: 50%;
+
+                  }
+              }"]
+       [:input.w-full.appearance-none.bg-gray-400.h-3.rounded.border.border-gray-500
+        {:type "range" :min 0 :max 30 :value duration :on-change #(swap! duration-state assoc :duration (js/parseInt ^js (.-target.value %)))}]]]
+     [button {:class "w-full" :on-click #(swap! duration-state assoc :time 0)} "Reset"]]))
+
 (defn app []
   [:div.p-6.container.mx-auto.text-gray-900
    [:h1.text-2xl.font-semibold.mb-8
@@ -128,7 +174,8 @@
    [:div.flex.flex-col.items-start
     [task-container {:title "Counter"} [counter]]
     [task-container {:title "Temperature Converter"} [temperature-converter]]
-    [task-container {:title "Flight Booker"} [flight-booker]]]])
+    [task-container {:title "Flight Booker"} [flight-booker]]
+    [task-container {:title "Timer"} [timer]]]])
 
 (dom/render
  [app]
