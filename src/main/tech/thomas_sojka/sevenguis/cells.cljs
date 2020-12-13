@@ -4,43 +4,53 @@
             [clojure.string :as str]
             [reagent.core :as r]))
 
-(defonce cells-state (r/atom {:cells (into [] (for [_ (range 20)] (into [](for [_ (range 5)] {:value "" }))))
+(defonce cells-state (r/atom {:cells (into [] (for [_ (range 100)] (into [](for [_ (range 26)] {:value "" }))))
                               :selected nil}))
 
-(defn params-coords [formula]
-  (map
-   (fn [coord]
-     (let [[letter number] (drop 1 (re-matches #"^([a-zA-Z])(\d+)$" (str coord)))
-           row (js/parseInt number)
-           col (- (pp/char-code (str/upper-case letter)) 65)]
-       [row col]))
-   (edn/read-string (last (str/split formula "=SUM")))))
+(defn params-coords [formula f-row f-col]
+  (->> (edn/read-string (last (re-matches #"^\=.*(\(.*\))" formula)))
+       (map
+        (fn [coord]
+          (let [[letter number] (drop 1 (re-matches #"^([a-zA-Z])(\d+)$" (str coord)))
+                row (js/parseInt number)
+                col (- (pp/char-code (str/upper-case letter)) 65)]
+            [row col])))
+       (remove #(= [f-row f-col] %))))
 
-(defn params-args [cells params-coords]
+(defn get-formula-args [cells param-coords]
   (map
    (fn [[row col]]
      (let [value (js/parseInt (:value (nth (nth cells row) col)))]
        (if (js/isNaN value) 0 value)))
-   params-coords))
+   param-coords))
+
+(defn apply-formula [cells row col formula params]
+  (assoc-in cells [row col :value]
+            (let [args (get-formula-args cells params)]
+              (apply
+               (let [fn-name (last (re-find #"^\=(.*)\(" formula))]
+                 (case fn-name
+                   "SUM" +
+                   "PRODUCT" *))
+               args))))
+
+(defn rerun-formula-params [cells params]
+  (reduce (fn [cells [p-row p-col]]
+            (let [{:keys [formula]} (nth (nth cells p-row) p-col)]
+              (if formula
+                (apply-formula cells p-row p-col formula (params-coords formula p-row p-col))
+                cells)))
+          cells
+          params))
 
 (defn run-notify [cells notify]
   (reduce
    (fn [cells [n-row n-col]]
      (let [{:keys [formula]} ((nth cells n-row) n-col)
-           params (params-coords formula)
-           updated-cells (reduce (fn [cells [p-row p-col]]
-                                   (let [{:keys [formula]} (nth (nth cells p-row) p-col)]
-                                     (if formula
-                                       (let [params (params-coords formula)
-                                             args (params-args cells params)]
-                                         (assoc-in cells [p-row p-col :value] (apply + args)))
-                                       cells)))
-                                 cells
-                                 params)
-           args (params-args updated-cells params)]
-       (assoc-in updated-cells
-                 [n-row n-col :value]
-                 (apply + args))))
+           params (params-coords formula n-row n-col) ]
+       (-> cells
+           (rerun-formula-params params)
+           (apply-formula n-row n-col formula params))))
    cells
    notify))
 
@@ -51,18 +61,23 @@
    cells
    params))
 
-(defn add-formula [cells row col formula params]
-  (update-in cells [row col]
-             (fn [cell]
-               (-> cell
-                   (assoc :formula formula)
-                   (assoc :value (let [args (params-args cells params)] (apply + args)))))))
+(defn add-formula [cells row col formula]
+  (let [params (params-coords formula row col)]
+    (-> cells
+        (apply-formula row col formula params)
+        (assoc-in [row col :formula] formula)
+        (add-notify params row col))))
+
+(defn update-value [cells row col value]
+  (if (str/starts-with? value "=")
+    (add-formula cells row col value)
+    (update-in cells [row col] assoc :value value)))
 
 (defn clear-notify [cells row col]
   (let [{:keys [formula]} (nth (nth cells row) col)]
     (if formula
       (update-in
-       (let [params (params-coords formula)]
+       (let [params (params-coords formula row col)]
          (reduce
           (fn [cells [p-row p-col]]
             (update-in cells [p-row p-col] update :notify (fn [notify] (remove #(= % [row col]) notify))))
@@ -75,16 +90,19 @@
 
 (defn update-cell [cells row col value]
   (let [{:keys [notify]} (nth (nth cells row) col)]
-    (if (str/starts-with? value "=SUM")
-      (let [params (params-coords value)]
-        (-> cells
-            (add-formula row col value params)
-            (add-notify params row col)
-            (run-notify notify)))
-      (-> cells
-          (clear-notify row col)
-          (update-in [row col] assoc :value value)
-          (run-notify notify)))))
+    (-> cells
+        (clear-notify row col)
+        (update-value row col value)
+        (run-notify notify))))
+
+(comment
+  (-> (into [] (for [_ (range 20)] (into [](for [_ (range 5)] {:value "" }))))
+      (update-cell 0 0 "5")
+      (update-cell 0 1 "5")
+      (update-cell 0 2 "=SUM(A0 B0 C0)))")
+      (update-cell 0 3 "=PRODUCT(A0 B0 C0)))")
+      (update-cell 0 1 "10"))
+  )
 
 (defn cells []
   [:<>
@@ -136,10 +154,13 @@
               contents))])
          cells))]])
    [:div.py-2
-    [:div "Double-Click to edit cell."]
+    [:div.mb-2 "Double-Click to edit cell."]
     [:div "Formulas:"]
-    [:ul
+    [:ul.pl-3
      [:li
       [:pre
-       "=SUM(A0 A1)"]]]]])
+       "=SUM(A0 A1)"]]
+     [:li
+      [:pre
+       "=PRODUCT(A0 A1)"]]]]])
 
