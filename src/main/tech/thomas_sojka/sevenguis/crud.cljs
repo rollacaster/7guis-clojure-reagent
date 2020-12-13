@@ -45,17 +45,17 @@
                  (str surname ", " name)]])))]
       [:div
        {:class "w-1/2"}
-       [:div.flex.mb-3
+       [:div.flex.mb-3.flex-col.md:flex-row
         [:label {:class "w-1/2" :for "crud-name"} "Name:"]
-        [input {:class "w-32" :id "crud-name"
+        [input {:class "md:w-32" :id "crud-name"
                 :value name
                 :on-change #(swap! crud-state assoc :name %)}]]
-       [:div.flex
+       [:div.flex.flex-col.md:flex-row
         [:label {:class "w-1/2" :for "crud-surname"} "Surname:"]
-        [input {:class "w-32" :id "crud-surname"
+        [input {:class "md:w-32" :id "crud-surname"
                 :value surname
                 :on-change #(swap! crud-state assoc :surname %)}]]]]
-     [:div
+     [:div.flex
       [button
        {:class "mr-3"
         :on-click #(when (and (not-empty name) (not-empty surname))

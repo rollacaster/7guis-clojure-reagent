@@ -1,6 +1,6 @@
 (ns tech.thomas-sojka.sevenguis.temperature-converter
-  (:require [tech.thomas-sojka.sevenguis.components :refer [input]]
-            [reagent.core :as r]))
+  (:require [reagent.core :as r]
+            [tech.thomas-sojka.sevenguis.components :refer [input]]))
 
 (defn fahrenheit->celsius [temperature]
   (Math/round (* (- temperature 32) (/ 5 9))))
@@ -19,7 +19,7 @@
     [input {:id "celsius"
             :value (:celsius @temperatures)
             :error (= (:error @temperatures) :celsius)
-            :class (when (= (:error @temperatures) :fahrenheit) "bg-gray-500")
+            :class (r/class-names (when (= (:error @temperatures) :fahrenheit) "bg-gray-500") "w-32")
             :disabled (= (:error @temperatures) :fahrenheit)
             :on-change
             (fn [new-celsius]
@@ -38,7 +38,7 @@
     [input {:id "fahrenheit"
             :value (:fahrenheit @temperatures)
             :error (= (:error @temperatures) :fahrenheit)
-            :class (when (= (:error @temperatures) :celsius) "bg-gray-500")
+            :class (r/class-names (when (= (:error @temperatures) :celsius) "bg-gray-500") "w-32")
             :disabled (= (:error @temperatures) :celsius)
             :on-change
             (fn [new-fahrenheit]

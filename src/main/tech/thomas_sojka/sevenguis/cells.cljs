@@ -126,35 +126,41 @@
              (map-indexed
               (fn [col]
                 (let [ref (atom nil)
-                      active (= selected [row col])]
+                      active (= selected [row col])
+                      submit-update #(swap! cells-state
+                                            (fn [state]
+                                              (-> state
+                                                  (update :cells update-cell row col  ^js (.-target.value %))
+                                                  (assoc :selected nil))))
+                      edit #(do
+                              (swap! cells-state
+                                     (fn [state]
+                                       (-> state
+                                           (assoc :selected [row col])
+                                           (update-in [:cells row col]
+                                                      (fn [cell]
+                                                        (if (:formula cell)
+                                                          (assoc cell :value (:formula cell))
+                                                          cell))))))
+                              ;; Focus hack no clue why this is necessary 🙈
+                              (let [ref @ref] (js/setTimeout (fn [] (.focus ref)) 1)))]
                   [:div {:key col}
                    [:button
-                    {:on-double-click #(do
-                                         (swap! cells-state
-                                                (fn [state]
-                                                  (-> state
-                                                      (assoc :selected [row col])
-                                                      (update-in [:cells row col]
-                                                                 (fn [cell]
-                                                                   (if (:formula cell)
-                                                                     (assoc cell :value (:formula cell))
-                                                                     cell))))))
-                                         ;; Focus hack no clue why this is necessary 🙈
-                                         (let [ref @ref] (js/setTimeout (fn [] (.focus ref)) 1)))}
+                    {:on-touch-start edit
+                     :on-double-click edit}
                     [:input.h-8.px-2.border.w-20
                      {:value (:value (nth (nth cells row) col))
                       :ref #(reset! ref %)
                       :disabled (not active)
-                      :on-blur #(swap! cells-state
-                                       (fn [state]
-                                         (-> state
-                                             (update :cells update-cell row col  ^js (.-target.value %))
-                                             (assoc :selected nil))))
+                      :on-key-down #(when (= ^js (.-keyCode %) 13)
+                                      (submit-update %))
+                      :on-blur submit-update
                       :on-change #(swap! cells-state assoc-in [:cells row col :value]  ^js (.-target.value %))}]]]))
               contents))])
          cells))]])
    [:div.py-2
-    [:div.mb-2 "Double-Click to edit cell."]
+    [:div.mb-2.hidden.md:block "Double-Click to edit cell."]
+    [:div.mb-2.block.md:hidden "Press enter to save cell."]
     [:div "Formulas:"]
     [:ul.pl-3
      [:li
